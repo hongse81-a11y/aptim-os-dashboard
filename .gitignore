@@ -3,3 +3,6 @@ venv/
 __pycache__/
 .streamlit/
 credentials.json
+build/
+dist/
+*.spec

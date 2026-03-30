@@ -4,6 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import plotly.express as px
 import os
+import sys
 
 # 1. 페이지 기본 설정
 st.set_page_config(page_title="APTIM OS 수강현황", layout="wide")
@@ -20,9 +21,15 @@ def load_data():
             'https://www.googleapis.com/auth/drive'
         ]
         
-        # 로컬(내 PC)에 credentials.json 파일이 있으면 파일로 인증
-        if os.path.exists('credentials.json'):
-            credentials = Credentials.from_service_account_file('credentials.json', scopes=scopes)
+        # 실행 파일(.exe)로 빌드된 경우와 일반 파이썬 실행 경로 구분
+        if getattr(sys, 'frozen', False):
+            cred_path = os.path.join(sys._MEIPASS, 'credentials.json')
+        else:
+            cred_path = 'credentials.json'
+
+        # credentials.json 파일이 있으면 파일로 인증
+        if os.path.exists(cred_path):
+            credentials = Credentials.from_service_account_file(cred_path, scopes=scopes)
         else:
             # 배포된 Cloud 환경(Streamlit Cloud)에서는 Secrets 저장소에서 인증키 정보를 불러옴
             credentials = Credentials.from_service_account_info(
@@ -48,8 +55,23 @@ def load_data():
                             break
                             
                     headers = values[header_index]
-                    # 그 다음 줄부터 실제 데이터로 변환 (중복된 헤더 이름이 있어도 pd.DataFrame은 허용함)
-                    df_temp = pd.DataFrame(values[header_index+1:], columns=headers)
+                    
+                    # 중복된 컬럼명 이름 변경 (Reindexing 오류 해결)
+                    seen = {}
+                    new_headers = []
+                    for h in headers:
+                        h_str = str(h).strip()
+                        if not h_str:
+                            h_str = "Unnamed"
+                        if h_str in seen:
+                            seen[h_str] += 1
+                            new_headers.append(f"{h_str}_{seen[h_str]}")
+                        else:
+                            seen[h_str] = 0
+                            new_headers.append(h_str)
+                            
+                    # 그 다음 줄부터 실제 데이터로 변환
+                    df_temp = pd.DataFrame(values[header_index+1:], columns=new_headers)
                     
                     # 빈 행 삭제 및 '순위'나 '이름'이 없는 빈 줄 데이터 완벽 제외
                     if '이름' in df_temp.columns:
@@ -145,45 +167,51 @@ if prev_week:
 else:
     st.write(f"**기준 주차:** {latest_week} (비교할 이전 주차 기록이 없습니다.)")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 latest_data = filtered_df[filtered_df['주차'] == latest_week]
 prev_data = filtered_df[filtered_df['주차'] == prev_week] if prev_week else pd.DataFrame()
 
 if not latest_data.empty:
-    avg_completion = latest_data['완료율'].mean()
-    avg_score = latest_data['평균 등급'].mean()
-    avg_participation = latest_data['참여율'].mean()
-    avg_courses = latest_data['수강 코스'].mean()
+    avg_completion = latest_data['완료율'].mean() if '완료율' in latest_data.columns else None
+    avg_score = latest_data['평균 등급'].mean() if '평균 등급' in latest_data.columns else None
+    avg_participation = latest_data['참여율'].mean() if '참여율' in latest_data.columns else None
+    avg_courses = latest_data['수강 코스'].mean() if '수강 코스' in latest_data.columns else None
+    avg_assignments = latest_data['제출 과제'].mean() if '제출 과제' in latest_data.columns else None
     
     delta_completion = None
     delta_score = None
     delta_participation = None
     delta_courses = None
+    delta_assignments = None
     
     # 전주 데이터가 존재하면 변화량(Delta) 계산
     if not prev_data.empty:
-        prev_completion = prev_data['완료율'].mean()
-        prev_score = prev_data['평균 등급'].mean()
-        prev_participation = prev_data['참여율'].mean()
-        prev_courses = prev_data['수강 코스'].mean()
+        prev_completion = prev_data['완료율'].mean() if '완료율' in prev_data.columns else None
+        prev_score = prev_data['평균 등급'].mean() if '평균 등급' in prev_data.columns else None
+        prev_participation = prev_data['참여율'].mean() if '참여율' in prev_data.columns else None
+        prev_courses = prev_data['수강 코스'].mean() if '수강 코스' in prev_data.columns else None
+        prev_assignments = prev_data['제출 과제'].mean() if '제출 과제' in prev_data.columns else None
         
         delta_completion = f"{avg_completion - prev_completion:.1f}%" if pd.notnull(avg_completion) and pd.notnull(prev_completion) else None
         delta_score = f"{avg_score - prev_score:.1f}점" if pd.notnull(avg_score) and pd.notnull(prev_score) else None
         delta_participation = f"{avg_participation - prev_participation:.1f}%" if pd.notnull(avg_participation) and pd.notnull(prev_participation) else None
         # 수강 코스(강의 개수)는 소수점 없이 정수로 표현
         delta_courses = f"{int(avg_courses - prev_courses)}개" if pd.notnull(avg_courses) and pd.notnull(prev_courses) else None
+        delta_assignments = f"{int(avg_assignments - prev_assignments)}개" if pd.notnull(avg_assignments) and pd.notnull(prev_assignments) else None
 
     # Delta 값을 포함하여 화면에 표시 (표시할 때 값이 숫자형이 아닐 경우(N/A)도 안전하게 처리)
     val_comp = f"{avg_completion:.1f}%" if pd.notnull(avg_completion) else "N/A"
     val_score = f"{avg_score:.1f}점" if pd.notnull(avg_score) else "N/A"
     val_part = f"{avg_participation:.1f}%" if pd.notnull(avg_participation) else "N/A"
     val_courses = f"{int(avg_courses)}개" if pd.notnull(avg_courses) else "N/A"
+    val_assignments = f"{int(avg_assignments)}개" if pd.notnull(avg_assignments) else "N/A"
 
     col1.metric("📊 평균 완료율", val_comp, delta=delta_completion)
     col2.metric("📋 평균 수강 코스", val_courses, delta=delta_courses)
     col3.metric("🎯 평균 평가 점수", val_score, delta=delta_score)
     col4.metric("🤝 주간 참여율", val_part, delta=delta_participation)
+    col5.metric("📝 평균 제출 과제", val_assignments, delta=delta_assignments)
 
 st.markdown("---")
 
@@ -192,7 +220,7 @@ st.subheader("📈 주간 학습 성과 변화 가시화")
 st.markdown("특정 인원에 대한 매주의 학습 진행 경과를 추적합니다.")
 
 # 탭을 나눠서 덜 복잡하게 표현
-tab1, tab2, tab3, tab4 = st.tabs(["수강 코스(강의 개수) 추이", "완료율 진척도 추이", "평균 점수 추이", "등급참여율 추이"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["수강 코스(강의 개수) 추이", "완료율 진척도 추이", "평균 점수 추이", "등급참여율 추이", "제출 과제 추이"])
 
 with tab1:
     if '수강 코스' in filtered_df.columns:
@@ -219,6 +247,12 @@ with tab4:
         fig_part = px.line(filtered_df, x='주차', y='참여율', color='이름', markers=True,
                            title='참여율 추이')
         st.plotly_chart(fig_part, use_container_width=True)
+
+with tab5:
+    if '제출 과제' in filtered_df.columns:
+        fig_assign = px.bar(filtered_df, x='주차', y='제출 과제', color='이름', text_auto=True,
+                            title='제출 과제 통합 변화', barmode='group')
+        st.plotly_chart(fig_assign, use_container_width=True)
 
 # --- 3. 상세 데이터 표 --- #
 st.markdown("---")
