@@ -9,8 +9,9 @@ import sys
 # 1. 페이지 기본 설정
 st.set_page_config(page_title="APTIM OS 수강현황", layout="wide")
 
-# 구글 시트 이름
+# 구글 시트 이름 및 ID
 SPREADSHEET_NAME = "APTIM OS 수강 현황"
+AFFILIATION_SHEET_ID = "1dLbbqbgyPZGAeEZDLkO86Pr9lTvVkVFVDOMeMIl1CFw"
 
 @st.cache_data(ttl=600)  # 데이터를 10분마다 새로 구글 시트에서 가져옴
 def load_data():
@@ -122,11 +123,61 @@ def load_data():
         st.error(f"구글 시트 데이터 로드 중 오류 발생: {e}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=600)
+def load_affiliation_data():
+    try:
+        scopes = [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        
+        if getattr(sys, 'frozen', False):
+            cred_path = os.path.join(sys._MEIPASS, 'credentials.json')
+        else:
+            cred_path = 'credentials.json'
+
+        if os.path.exists(cred_path):
+            credentials = Credentials.from_service_account_file(cred_path, scopes=scopes)
+        else:
+            credentials = Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"], scopes=scopes
+            )
+            
+        gc = gspread.authorize(credentials)
+        # ID로 시트 열기
+        spreadsheet = gc.open_by_key(AFFILIATION_SHEET_ID)
+        worksheet = spreadsheet.get_worksheet(0) # 첫 번째 시트
+        
+        values = worksheet.get_all_values()
+        if len(values) > 1:
+            # 브라우저 확인 결과: 이름(B열/index 1), 소속(E열/index 4)
+            data = []
+            for row in values[1:]: # 헤더 제외
+                if len(row) > 4:
+                    name = row[1].strip()
+                    aff = row[4].strip()
+                    if name:
+                        data.append({'이름': name, '소속': aff})
+            
+            return pd.DataFrame(data).drop_duplicates(subset=['이름'])
+        return pd.DataFrame()
+    except Exception as e:
+        st.sidebar.error(f"소속 매핑 데이터를 불러오지 못했습니다: {e}")
+        return pd.DataFrame()
+
 # ==================== UI 구성 ==================== #
 st.title("📊 APTIM OS 주간 수강현황 대시보드")
 st.markdown("---")
 
 df = load_data()
+aff_df = load_affiliation_data()
+
+# 소속 정보 병합
+if not df.empty and not aff_df.empty:
+    df = df.merge(aff_df, on='이름', how='left')
+    # 소속 정보가 없는 경우 '미분류' 처리
+    if '소속' in df.columns:
+        df['소속'] = df['소속'].fillna('미분류')
 
 # 데이터 로딩 실패 처리
 if df.empty:
@@ -139,8 +190,25 @@ st.sidebar.header("🔍 대시보드 필터")
 # 이름 검색 드롭다운 (다중 선택)
 all_names = sorted(df['이름'].dropna().unique().tolist())
 
-# 기본값을 비워두고, 선택하지 않으면 전체 인원 조회로 간주
-selected_names = st.sidebar.multiselect("개별/복수 인원 선택 (추세 분석)", options=all_names, default=[], placeholder="선택 안 함 (전체 보기)")
+# 소속별 그룹 선택 추가
+if '소속' in df.columns:
+    all_groups = sorted(df['소속'].dropna().unique().tolist())
+    selected_groups = st.sidebar.multiselect("소속 그룹 선택 (그룹 단위 선택)", options=all_groups, default=[], placeholder="그룹 선택")
+    
+    # 선택된 그룹에 속한 이름들을 기본값으로 설정하기 위함
+    group_member_names = df[df['소속'].isin(selected_groups)]['이름'].unique().tolist() if selected_groups else []
+else:
+    selected_groups = []
+    group_member_names = []
+
+# 개별 인원 선택 (그룹 선택에 따른 초기값 연동)
+# multiselect의 default 값을 group_member_names로 설정하면 그룹 선택 시 자동으로 채워짐
+selected_names = st.sidebar.multiselect(
+    "개별/복수 인원 선택 (추세 분석)", 
+    options=all_names, 
+    default=group_member_names, 
+    placeholder="선택 안 함 (전체 보기)"
+)
 
 # 필터링 적용 (아무도 선택하지 않은 경우 원본 전체 df 사용)
 if not selected_names:
