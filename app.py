@@ -78,6 +78,10 @@ def load_data():
                     if '이름' in df_temp.columns:
                         df_temp = df_temp[df_temp['이름'].astype(str).str.strip() != '']
                         
+                        # 특정 인원 제외
+                        excluded_names = ['박태상', '박진석', '이영호', '이정혁', '성준규', '최준영', '이용철', '석재호', '권세희', '이한구', '이정규', '이서후', '김현수']
+                        df_temp = df_temp[~df_temp['이름'].astype(str).str.strip().isin(excluded_names)]
+                        
                     df_temp.dropna(how='all', inplace=True)
                     
                     if not df_temp.empty:
@@ -150,14 +154,13 @@ def load_affiliation_data():
         
         values = worksheet.get_all_values()
         if len(values) > 1:
-            # 브라우저 확인 결과: 이름(B열/index 1), 소속(E열/index 4)
+            # 브라우저 확인 결과: 이름(B열/index 1), 소속(G열/index 6)
             data = []
             for row in values[1:]: # 헤더 제외
-                if len(row) > 4:
-                    name = row[1].strip()
-                    aff = row[4].strip()
-                    if name:
-                        data.append({'이름': name, '소속': aff})
+                name = row[1].strip() if len(row) > 1 else ""
+                aff = row[6].strip() if len(row) > 6 else ""
+                if name:
+                    data.append({'이름': name, '소속': aff})
             
             return pd.DataFrame(data).drop_duplicates(subset=['이름'])
         return pd.DataFrame()
