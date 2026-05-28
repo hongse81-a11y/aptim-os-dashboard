@@ -427,7 +427,7 @@ with tab6:
                                     </div>
                                 </div>
                                 """,
-                                unsafe_allow_code=True
+                                unsafe_allow_html=True
                             )
                 else:
                     st.info("조건에 만족하는 하위 대상 데이터가 없습니다.")
