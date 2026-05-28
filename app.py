@@ -328,7 +328,7 @@ with tab5:
 
 with tab6:
     st.markdown("### ⚠️ 기수별 최하위 2명 모니터링 리포트")
-    st.markdown("선택된 **기준 주차**의 총 완료율 50%와 과제 제출 총량 50%를 합산 순위(Rank Sum)로 반영하여 기수별 최하위 2명을 선정합니다.")
+    st.markdown("선택된 **기준 주차**의 총 완료율 30%와 과제 제출 총량 70%를 가중치 순위(Weighted Rank Sum)로 반영하여 기수별 최하위 2명을 선정합니다.")
     st.markdown("* 1기 인원은 최하위 선정 대상에서 제외됩니다.")
 
     if '기수' in df.columns:
@@ -359,10 +359,10 @@ with tab6:
                 cohort_df['완료율_순위'] = cohort_df['완료율'].rank(method='min', ascending=True)
                 cohort_df['과제제출_순위'] = cohort_df['제출 과제'].rank(method='min', ascending=True)
                 
-                # 두 순위의 합산 점수 (Rank Sum)
-                cohort_df['순위합산'] = cohort_df['완료율_순위'] + cohort_df['과제제출_순위']
+                # 두 순위의 가중 합산 점수 (완료율 30%, 과제제출 70%)
+                cohort_df['순위합산'] = (cohort_df['완료율_순위'] * 0.3) + (cohort_df['과제제출_순위'] * 0.7)
                 
-                # 순위합산이 낮은 순(실적이 가장 나쁜 순)으로 정렬
+                # 가중 순위합산이 낮은 순(실적이 가장 나쁜 순)으로 정렬
                 cohort_df = cohort_df.sort_values(by=['순위합산', '완료율', '제출 과제'], ascending=[True, True, True])
                 
                 # 하위 2명 선정
