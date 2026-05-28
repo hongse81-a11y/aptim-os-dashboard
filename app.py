@@ -328,113 +328,100 @@ with tab5:
 
 with tab6:
     st.markdown("### ⚠️ 기수별 최하위 2명 모니터링 리포트")
-    st.markdown("선택된 **기준 주차**의 수강 완료율 변화(전주 대비 완료율 증감) 50%와 과제 제출 양 50%를 합산 순위(Rank Sum)로 반영하여 기수별 최하위 2명을 선정합니다.")
+    st.markdown("선택된 **기준 주차**의 총 완료율 50%와 과제 제출 총량 50%를 합산 순위(Rank Sum)로 반영하여 기수별 최하위 2명을 선정합니다.")
     st.markdown("* 1기 인원은 최하위 선정 대상에서 제외됩니다.")
 
-    if not prev_week:
-        st.info("비교할 이전 주차 기록이 없어 최하위 2명 선정을 위한 주간 완료율 변화량을 계산할 수 없습니다. 지난 주차가 존재하는 주차를 선택해 주세요.")
-    else:
-        if '기수' in df.columns:
-            # 기수 데이터 전처리
-            df['기수'] = df['기수'].fillna('미분류').astype(str).str.strip().replace('', '미분류')
+    if '기수' in df.columns:
+        # 기수 데이터 전처리
+        df['기수'] = df['기수'].fillna('미분류').astype(str).str.strip().replace('', '미분류')
+        
+        # 1기를 제외한 유효 기수 추출
+        cohorts = sorted([c for c in df['기수'].unique() if c and c != '1기' and c != 'Drop-out' and c != '미분류'])
+        
+        latest_all = df[df['주차'] == latest_week].copy()
+        
+        if not latest_all.empty:
+            # 이번주의 완료율 및 제출과제 데이터 준비
+            metrics = latest_all[['이름', '완료율', '제출 과제', '기수', '소속']].copy()
             
-            # 1기를 제외한 유효 기수 추출
-            cohorts = sorted([c for c in df['기수'].unique() if c and c != '1기' and c != 'Drop-out' and c != '미분류'])
+            # 수치 전처리
+            metrics['완료율'] = pd.to_numeric(metrics['완료율'], errors='coerce').fillna(0)
+            metrics['제출 과제'] = pd.to_numeric(metrics['제출 과제'], errors='coerce').fillna(0)
             
-            latest_all = df[df['주차'] == latest_week].copy()
-            prev_all = df[df['주차'] == prev_week].copy()
+            bottom_members = []
             
-            if not latest_all.empty:
-                # 이번주와 지난주의 완료율 및 이번주 제출과제 데이터 결합
-                latest_metrics = latest_all[['이름', '완료율', '제출 과제', '기수', '소속']].copy()
-                prev_metrics = prev_all[['이름', '완료율']].copy()
+            for cohort in cohorts:
+                cohort_df = metrics[metrics['기수'] == cohort].copy()
+                if cohort_df.empty:
+                    continue
                 
-                merged_metrics = pd.merge(latest_metrics, prev_metrics, on='이름', how='left', suffixes=('_이번주', '_지난주'))
+                # 순위 계산 (오름차순: 실적이 낮을수록 순위 점수가 낮아짐, 공동 최하위 발생 시 method='min' 적용)
+                cohort_df['완료율_순위'] = cohort_df['완료율'].rank(method='min', ascending=True)
+                cohort_df['과제제출_순위'] = cohort_df['제출 과제'].rank(method='min', ascending=True)
                 
-                # 수치 전처리
-                merged_metrics['완료율_이번주'] = pd.to_numeric(merged_metrics['완료율_이번주'], errors='coerce').fillna(0)
-                merged_metrics['완료율_지난주'] = pd.to_numeric(merged_metrics['완료율_지난주'], errors='coerce').fillna(0)
-                merged_metrics['제출 과제'] = pd.to_numeric(merged_metrics['제출 과제'], errors='coerce').fillna(0)
+                # 두 순위의 합산 점수 (Rank Sum)
+                cohort_df['순위합산'] = cohort_df['완료율_순위'] + cohort_df['과제제출_순위']
                 
-                # 완료율 변화 계산
-                merged_metrics['완료율 변화'] = merged_metrics['완료율_이번주'] - merged_metrics['완료율_지난주']
+                # 순위합산이 낮은 순(실적이 가장 나쁜 순)으로 정렬
+                cohort_df = cohort_df.sort_values(by=['순위합산', '완료율', '제출 과제'], ascending=[True, True, True])
                 
-                bottom_members = []
+                # 하위 2명 선정
+                bottom_2 = cohort_df.head(2)
+                bottom_members.append(bottom_2)
+            
+            if bottom_members:
+                final_bottom_df = pd.concat(bottom_members, ignore_index=True)
                 
-                for cohort in cohorts:
-                    cohort_df = merged_metrics[merged_metrics['기수'] == cohort].copy()
-                    if cohort_df.empty:
+                # 기수 정렬순으로 표시
+                final_bottom_df = final_bottom_df.sort_values(by=['기수', '순위합산'], ascending=[True, True])
+                
+                st.markdown("#### 🚨 기수별 관리 대상 (하위 2명) 현황")
+                
+                # 표용 데이터 프레임 정비
+                display_cols = ['기수', '이름', '소속', '완료율', '제출 과제']
+                df_to_show = final_bottom_df[display_cols].copy()
+                df_to_show.columns = ['기수', '이름', '소속', '총 완료율', '과제 제출 총량']
+                
+                # 단위 포맷팅
+                df_to_show['총 완료율'] = df_to_show['총 완료율'].map(lambda x: f"{x:.1f}%")
+                df_to_show['과제 제출 총량'] = df_to_show['과제 제출 총량'].map(lambda x: f"{int(x)}개")
+                
+                st.dataframe(df_to_show, use_container_width=True, hide_index=True)
+                
+                # 시각적 가시성을 위한 기수별 요약 카드 렌더링
+                st.markdown("#### 📌 기수별 모니터링 대상자 코멘트")
+                cols = st.columns(3)
+                for idx, cohort in enumerate(cohorts):
+                    cohort_bottom = final_bottom_df[final_bottom_df['기수'] == cohort]
+                    if cohort_bottom.empty:
                         continue
                     
-                    # 순위 계산 (오름차순: 실적이 낮을수록 순위 점수가 낮아짐, 공동 최하위 발생 시 method='min' 적용)
-                    cohort_df['완료율변화_순위'] = cohort_df['완료율 변화'].rank(method='min', ascending=True)
-                    cohort_df['과제제출_순위'] = cohort_df['제출 과제'].rank(method='min', ascending=True)
-                    
-                    # 두 순위의 합산 점수 (Rank Sum)
-                    cohort_df['순위합산'] = cohort_df['완료율변화_순위'] + cohort_df['과제제출_순위']
-                    
-                    # 순위합산이 낮은 순(실적이 가장 나쁜 순)으로 정렬
-                    cohort_df = cohort_df.sort_values(by=['순위합산', '완료율 변화', '제출 과제'], ascending=[True, True, True])
-                    
-                    # 하위 2명 선정
-                    bottom_2 = cohort_df.head(2)
-                    bottom_members.append(bottom_2)
-                
-                if bottom_members:
-                    final_bottom_df = pd.concat(bottom_members, ignore_index=True)
-                    
-                    # 기수 정렬순으로 표시
-                    final_bottom_df = final_bottom_df.sort_values(by=['기수', '순위합산'], ascending=[True, True])
-                    
-                    st.markdown("#### 🚨 기수별 관리 대상 (하위 2명) 현황")
-                    
-                    # 표용 데이터 프레임 정비
-                    display_cols = ['기수', '이름', '소속', '완료율_이번주', '완료율 변화', '제출 과제']
-                    df_to_show = final_bottom_df[display_cols].copy()
-                    df_to_show.columns = ['기수', '이름', '소속', '이번주 완료율', '완료율 변화 (전주대비)', '이번주 과제 제출']
-                    
-                    # 단위 포맷팅
-                    df_to_show['이번주 완료율'] = df_to_show['이번주 완료율'].map(lambda x: f"{x:.1f}%")
-                    df_to_show['완료율 변화 (전주대비)'] = df_to_show['완료율 변화 (전주대비)'].map(lambda x: f"+{x:.1f}%p" if x > 0 else f"{x:.1f}%p")
-                    df_to_show['이번주 과제 제출'] = df_to_show['이번주 과제 제출'].map(lambda x: f"{int(x)}개")
-                    
-                    st.dataframe(df_to_show, use_container_width=True, hide_index=True)
-                    
-                    # 시각적 가시성을 위한 기수별 요약 카드 렌더링
-                    st.markdown("#### 📌 기수별 모니터링 대상자 코멘트")
-                    cols = st.columns(3)
-                    for idx, cohort in enumerate(cohorts):
-                        cohort_bottom = final_bottom_df[final_bottom_df['기수'] == cohort]
-                        if cohort_bottom.empty:
-                            continue
-                        
-                        with cols[idx % 3]:
-                            details_list = []
-                            for _, row in cohort_bottom.iterrows():
-                                change_str = f"+{row['완료율 변화']:.1f}%p" if row['완료율 변화'] > 0 else f"{row['완료율 변화']:.1f}%p"
-                                details_list.append(
-                                    f"📍 **{row['이름']}** ({row['소속']})<br>"
-                                    f"&nbsp;&nbsp; 완료율 변화: {change_str} | 과제 제출: {int(row['제출 과제'])}개"
-                                )
-                            details_str = "<br><br>".join(details_list)
-                            
-                            st.markdown(
-                                f"""
-                                <div style="background-color: #fff5f5; border-left: 5px solid #ff4d4d; padding: 15px; border-radius: 6px; margin-bottom: 15px; min-height: 140px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                                    <h4 style="margin: 0 0 10px 0; color: #d93838; font-weight: bold;">🏷️ {cohort}</h4>
-                                    <div style="font-size: 13.5px; color: #4a4a4a; line-height: 1.5;">
-                                        {details_str}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
+                    with cols[idx % 3]:
+                        details_list = []
+                        for _, row in cohort_bottom.iterrows():
+                            details_list.append(
+                                f"📍 **{row['이름']}** ({row['소속']})<br>"
+                                f"&nbsp;&nbsp; 총 완료율: {row['완료율']:.1f}% | 과제 제출 총량: {int(row['제출 과제'])}개"
                             )
-                else:
-                    st.info("조건에 만족하는 하위 대상 데이터가 없습니다.")
+                        details_str = "<br><br>".join(details_list)
+                        
+                        st.markdown(
+                            f"""
+                            <div style="background-color: #fff5f5; border-left: 5px solid #ff4d4d; padding: 15px; border-radius: 6px; margin-bottom: 15px; min-height: 140px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                                <h4 style="margin: 0 0 10px 0; color: #d93838; font-weight: bold;">🏷️ {cohort}</h4>
+                                <div style="font-size: 13.5px; color: #4a4a4a; line-height: 1.5;">
+                                    {details_str}
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
             else:
-                st.info("선택한 기준 주차에 해당하는 수강 데이터가 존재하지 않습니다.")
+                st.info("조건에 만족하는 하위 대상 데이터가 없습니다.")
         else:
-            st.warning("데이터에 기수 정보가 없습니다. 관리자에게 문의하세요.")
+            st.info("선택한 기준 주차에 해당하는 수강 데이터가 존재하지 않습니다.")
+    else:
+        st.warning("데이터에 기수 정보가 없습니다. 관리자에게 문의하세요.")
 
 
 # --- 3. 상세 데이터 표 --- #
