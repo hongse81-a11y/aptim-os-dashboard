@@ -188,32 +188,12 @@ if df.empty:
     st.warning(f"'{SPREADSHEET_NAME}' 시트에서 데이터를 찾을 수 없습니다. (1) 시트 이름을 정확히 확인하시고, (2) '공유'에 서비스 계정(credentials.json 이메일) 편집자 추가를 꼭 진행해 주세요!")
     st.stop()
 
-# --- 사용자 권한 확인 (Streamlit Cloud 인증) --- #
-ADMIN_EMAILS = ["smhong@kumkangkind.com", "chnam@kumkangkind.com"]
-
-user_email = ""
-try:
-    # Streamlit Cloud 환경에서 사용자 이메일 감지
-    if hasattr(st, "context") and hasattr(st.context, "user") and st.context.user.email:
-        user_email = st.context.user.email
-    elif hasattr(st, "user") and st.user.email:
-        user_email = st.user.email
-    elif hasattr(st, "experimental_user") and hasattr(st.experimental_user, "email"):
-        user_email = st.experimental_user.email
-except Exception:
-    pass
-
+# --- 사용자 권한 확인 (비밀번호 인증) --- #
 is_admin = False
-if user_email:
-    if user_email.lower().strip() in ADMIN_EMAILS:
-        is_admin = True
-else:
-    # 로컬 개발용 및 로그인 대체 입력창 제공
-    st.sidebar.markdown("🔒 **관리자 권한**")
-    test_email = st.sidebar.text_input("권한 확인용 이메일 입력", value="", placeholder="이메일 주소 입력", type="password")
-    if test_email.lower().strip() in ADMIN_EMAILS:
-        is_admin = True
-        user_email = test_email
+st.sidebar.markdown("🔒 **관리자 권한**")
+admin_password = st.sidebar.text_input("관리자 비밀번호 입력", value="", placeholder="비밀번호 입력", type="password")
+if admin_password == "VAIIKK":
+    is_admin = True
 
 # --- 사이드바 필터 --- #
 st.sidebar.header("🔍 대시보드 필터")
@@ -361,14 +341,11 @@ with tab6:
     if not is_admin:
         st.warning("🔒 **접근 권한이 없습니다.**")
         st.info(
-            f"""
+            """
             이 리포트는 지정된 관리자만 열람할 수 있습니다.
             
-            **로그인 및 권한 획득 방법:**
-            1. **로그인 완료하기**: 오른쪽 아래의 Streamlit 아이콘 메뉴를 클릭하고 Google 또는 GitHub 계정으로 로그인해 주세요.
-            2. **대체 인증 사용**: 로그인에 어려움이 있는 경우, 왼쪽 사이드바 하단의 **[권한 확인용 이메일 입력]**란에 승인된 관리자 이메일을 입력하세요.
-            
-            *(현재 감지된 이메일: {user_email if user_email else '미로그인'})*
+            **권한 획득 방법:**
+            - 왼쪽 사이드바 하단의 **[관리자 비밀번호 입력]**란에 승인된 비밀번호를 입력하세요.
             """
         )
     else:
