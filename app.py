@@ -82,7 +82,7 @@ def load_data():
                         df_temp['이름'] = df_temp['이름'].astype(str).str.replace(r'\(.*?\)', '', regex=True).str.strip()
                         
                         # 특정 인원 제외
-                        excluded_names = ['박태상', '박진석', '이영호', '이정혁', '성준규', '최준영', '이용철', '석재호', '권세희', '이한구', '이정규', '이서후', '김현수']
+                        excluded_names = ['박태상', '박진석', '이영호', '이정혁', '성준규', '최준영', '이용철', '석재호', '권세희', '이한구', '이정규', '이서후']
                         df_temp = df_temp[~df_temp['이름'].astype(str).str.strip().isin(excluded_names)]
                         
                     df_temp.dropna(how='all', inplace=True)
