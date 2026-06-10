@@ -185,8 +185,8 @@ if not df.empty and not aff_df.empty:
     # 소속 정보가 없는 경우 '미분류' 처리
     if '소속' in df.columns:
         df['소속'] = df['소속'].fillna('미분류')
-        # 이노베이터팀_온보딩 및 AX팀 제외 (이노베이터팀 인원만 반영)
-        df = df[~df['소속'].isin(['이노베이터팀_온보딩', 'AX팀'])]
+        # AX팀 제외 (이노베이터팀 인원만 반영)
+        df = df[~df['소속'].isin(['AX팀'])]
 
 
 # 데이터 로딩 실패 처리
