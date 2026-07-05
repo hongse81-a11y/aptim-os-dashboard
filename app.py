@@ -85,8 +85,9 @@ def load_data():
                         df_temp['이름'] = df_temp['이름'].str.replace(r'^(팀장|부문장|센터장|본부장|실장|그룹장|파트장)\s+', '', regex=True).str.strip()
                         
                         # 특정 인원 제외
-                        excluded_names = ['박태상', '박진석', '이영호', '이정혁', '성준규', '최준영', '이용철', '석재호', '권세희', '이한구', '이정규', '이서후']
-                        df_temp = df_temp[~df_temp['이름'].astype(str).str.strip().isin(excluded_names)]
+                        # (요청에 따라 기존 전체 인원 제외 필터를 삭제하고 모든 데이터를 노출합니다)
+                        # excluded_names = ['박태상', '박진석', '이영호', '이정혁', '성준규', '최준영', '이용철', '석재호', '권세희', '이한구', '이정규', '이서후']
+                        # df_temp = df_temp[~df_temp['이름'].astype(str).str.strip().isin(excluded_names)]
                         
                     df_temp.dropna(how='all', inplace=True)
                     
@@ -118,8 +119,9 @@ def load_data():
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 
         # (옵션) '완료율'이 100 넘어가는 경우 등이 있다면 100 이하로 고정
-        if '완료율' in df.columns:
-            df['완료율'] = df['완료율'].apply(lambda x: min(x, 100) if pd.notnull(x) else x)
+        # (요청에 따라 완료율 100 초과 고정 로직 제거 - 기존 데이터 그대로 노출)
+        # if '완료율' in df.columns:
+        #     df['완료율'] = df['완료율'].apply(lambda x: min(x, 100) if pd.notnull(x) else x)
             
         # '제출 과제', '수강 코스' 등에 있는 '개' 글자도 지우고 숫자형으로 변환해두면 좋습니다.
         for col in ['제출 과제', '수강 코스']:
@@ -189,7 +191,8 @@ if not df.empty and not aff_df.empty:
     if '소속' in df.columns:
         df['소속'] = df['소속'].fillna('미분류')
         # AX팀 제외 (이노베이터팀 인원만 반영)
-        df = df[~df['소속'].isin(['AX팀'])]
+        # (요청에 따라 AX팀 제외 로직 삭제 - 모든 소속 노출)
+        # df = df[~df['소속'].isin(['AX팀'])]
 
 
 # 데이터 로딩 실패 처리
