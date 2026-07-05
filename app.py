@@ -81,6 +81,9 @@ def load_data():
                         # 이름 열에서 괄호 및 괄호 안의 내용 제거 (예: 김현수(부산설계) -> 김현수, 이영호(언양) -> 이영호, 김상현(특수) -> 김상현)
                         df_temp['이름'] = df_temp['이름'].astype(str).str.replace(r'\(.*?\)', '', regex=True).str.strip()
                         
+                        # 직책(팀장, 부문장 등) 제거 (예: 팀장 김태영 -> 김태영)
+                        df_temp['이름'] = df_temp['이름'].str.replace(r'^(팀장|부문장|센터장|본부장|실장|그룹장|파트장)\s+', '', regex=True).str.strip()
+                        
                         # 특정 인원 제외
                         excluded_names = ['박태상', '박진석', '이영호', '이정혁', '성준규', '최준영', '이용철', '석재호', '권세희', '이한구', '이정규', '이서후']
                         df_temp = df_temp[~df_temp['이름'].astype(str).str.strip().isin(excluded_names)]
